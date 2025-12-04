@@ -1,10 +1,5 @@
-# customer prime num = free
-# cart value greater than 2000 + free
-# cart value is bewteen 500 - 1000 devlivery is 40
-# cart is less than 500, delviery 60
-# location is remote than india = delviry + 50 rupees extra
-
 import math
+import requests
 
 # --- CORE LOGIC FUNCTIONS ---
 
@@ -39,7 +34,15 @@ def calculate_delivery_charge(customer_id, cart_value, location):
   2. Cart value > 2000: Free (0)
   3. Cart value 500 - 1000: Base fee of 40
   4. Cart value < 500: Base fee of 60
-  5. Location is 'remote' or 'outside India': +50 extra on top of base fee
+  5. Location is remote (not India): +50 extra on top of base fee
+  
+  Args:
+    customer_id (int): ID used for prime check.
+    cart_value (float): Total value of items.
+    location (str): Detected country name (or 'India' on error).
+    
+  Returns:
+    float: The final calculated delivery charge.
   """
   
   base_charge = 0
@@ -55,13 +58,11 @@ def calculate_delivery_charge(customer_id, cart_value, location):
     # Rule 4: Cart value less than 500 is 60
     base_charge = 60
   else:
-    # Handles cart values > 1000 and <= 2000. Assuming standard flat rate here.
-    # Since only 500-1000 and < 500 were specified, let's treat the remaining
-    # range (1001-2000) as the next tier, let's say 20 rupees, or perhaps free
-    # if it's considered premium. Based on the tiers, let's set it to 20.
+    # Handles cart values > 1000 and <= 2000 (default tier, 20 rupees)
     base_charge = 20
   
   # --- Step 2: Apply Prime Number Discount (Rule 1) ---
+  # Note: The prime discount overrides cart value rules if applicable
   if is_prime(customer_id):
     print(f"\n✅ Customer ID {customer_id} is a prime number! Delivery is FREE.")
     base_charge = 0
@@ -69,21 +70,56 @@ def calculate_delivery_charge(customer_id, cart_value, location):
   # --- Step 3: Apply Remote/Outside India Surcharge (Rule 5) ---
   surcharge = 0
   
-  # Normalize location input for case-insensitive check
-  location_lower = location.strip().lower()
-
-  if location_lower in ['remote', 'outside india']:
+  # The surcharge is applied if the detected location is not 'india'.
+  # We use .lower() for case-insensitive comparison.
+  if location.strip().lower() != 'india':
     surcharge = 50
-    print(f"⚠️ Location '{location}' is remote/outside India. A surcharge of +{surcharge} will be added.")
+    # Note: 'location' here is the detected country name
+    print(f"⚠️ Detected location '{location}' is outside India. A surcharge of +{surcharge} will be added.")
   
   # --- Step 4: Calculate Final Total ---
   final_charge = base_charge + surcharge
   return final_charge
 
 
+def get_location_status():
+  """
+  Uses an external IP-based geolocation API (ip-api.com) to detect the user's 
+  current country automatically.
+  
+  Returns:
+    str: The detected country name. Defaults to 'India' on API failure 
+         to prevent unintended surcharges.
+  """
+  try:
+    # Use a free, simple IP geolocation API to get the country.
+    # The API call automatically uses the client's public IP address.
+    api_url = 'http://ip-api.com/json/'
+    response = requests.get(api_url, timeout=5)
+    response.raise_for_status() # Raise exception for bad status codes (4xx or 5xx)
+    data = response.json()
+    
+    # Extract the country name. The API returns the field 'country'
+    country = data.get('country') 
+    
+    if country:
+        return country
+    else:
+        return "Unknown"
+             
+  except requests.exceptions.RequestException as e:
+    # Handle network errors, timeouts, or API unavailability
+    print(f"🚨 Warning: Could not fetch location data ({e}). Defaulting location status to 'India'.")
+    return "India" # Default to 'India' to avoid unexpected surcharge on failure
+
+
 # --- MAIN EXECUTION BLOCK ---
 
 if __name__ == "__main__":
+  # Add a note about the requests dependency
+  print("# NOTE: This script requires the 'requests' library (pip install requests)")
+  print("----------------------------------------------------------------------")
+  
   print("🛒 E-Commerce Delivery Calculator Service 🚚")
   print("-" * 45)
   
@@ -99,8 +135,9 @@ if __name__ == "__main__":
     if cart_value < 0:
       raise ValueError("Cart value must be a non-negative number.")
       
-    # 3. Location (for surcharge check)
-    location = input("Enter Location (e.g., India, Remote, Outside India): ")
+    # 3. Location (AUTOMATED DETECTION)
+    location = get_location_status()
+    print(f"🌍 Detected Location: {location}")
     
     # Calculate the final charge
     total_delivery_charge = calculate_delivery_charge(customer_id, cart_value, location)
